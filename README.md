@@ -2,7 +2,7 @@
 
 Пример конфигурации в Symfony:
 
-````
+```php
 dv_evil_queue:
     debug: "%kernel.debug%"
     connection: "@doctrine.dbal.xmlrpc_connection"

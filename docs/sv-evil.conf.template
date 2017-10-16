@@ -1,0 +1,10 @@
+[program:{project}_evil]
+command = /srv/{project}/current/bin/console dv:evil:queue -e prod
+autostart = true
+autorestart = true
+user = zappstore
+directory = /srv/{project}/current
+redirect_stderr = true
+stdout_logfile = /var/log/{project}-evil.log
+startsecs=3
+startretries=3

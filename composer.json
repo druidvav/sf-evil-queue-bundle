@@ -1,0 +1,21 @@
+{
+  "name": "druidvav/page-metadata-bundle",
+  "type": "symfony-bundle",
+  "license": "MIT",
+  "description": "",
+  "autoload": {
+    "psr-4": { "": "src/" }
+  },
+  "require": {
+    "php": ">=7.0.0",
+    "symfony/framework-bundle": "^3.2",
+    "symfony/process": "^3.2",
+    "symfony/console": "^3.2",
+    "doctrine/dbal": "^2.5",
+    "druidvav/essentials-bundle": "^1.5",
+    "zendframework/zend-xmlrpc": "^2.6"
+  },
+  "require-dev": {
+
+  }
+}

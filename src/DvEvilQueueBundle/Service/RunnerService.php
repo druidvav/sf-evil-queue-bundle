@@ -62,44 +62,40 @@ class RunnerService
         foreach ($downHostsRaw as $row) {
             $downHosts[] = $row['host'];
         }
-        $this->conn->beginTransaction();
-        try {
-            $conditions = '';
-            if (!empty($downHosts)) $conditions .= " and SUBSTRING(q.url from 1 for locate('/', q.url, 10) - 1) not in (:downHosts)";
-            if ($this->isPriority) $conditions .= ' and q.priority > 0';
-            $request = $this->conn->fetchAssoc("
-                select q.*
-                from xmlrpc_queue q
-                left join xmlrpc_queue qprev on qprev.name = q.name and qprev.id < q.id
-                where
-                  qprev.id is null
-                  and (q.last_request_start is null or q.last_request_start <= q.last_request_date)
-                  and (q.last_request_date is null or FROM_UNIXTIME(unix_timestamp(q.last_request_date) + pow(q.tries, 2.5)) < now())
-                  {$conditions}
-                  order by q.priority desc, q.id asc limit 1 for update;
-            ", [
-                'downHosts' => $downHosts
-            ], [
-                'downHosts' => Connection::PARAM_STR_ARRAY
-            ]);
-            if (!empty($request) && !empty($request['id'])) {
-                $requestStart = date('Y-m-d H:i:s');
-                $this->conn->update('xmlrpc_queue', [ 'last_request_start' => $requestStart, 'last_request_date' => null ], [ 'id' => $request['id'] ]);
-                $request['last_request_start'] = $requestStart;
-            } else {
-                $request = null;
-            }
-            $this->conn->commit();
-            return $request;
-        } catch (DeadlockException $exception) {
-            $this->conn->rollBack();
-            sleep(random_int(1, 3));
-            return null;
-        } catch (LockWaitTimeoutException $exception) {
-            $this->conn->rollBack();
-            sleep(random_int(1, 3));
-            return null;
+        $conditions = '';
+        if (!empty($downHosts)) $conditions .= " and SUBSTRING(q.url from 1 for locate('/', q.url, 10) - 1) not in (:downHosts)";
+        if ($this->isPriority) $conditions .= ' and q.priority > 0';
+        $lockResult = $this->conn->fetchColumn('select GET_LOCK(\'evil\', 5)');
+        if (empty($lockResult)) {
+            $this->logger->alert('Cannot obtain "evil" lock');
         }
+        $request = $this->conn->fetchAssoc("
+            select q.*
+            from xmlrpc_queue q
+            left join xmlrpc_queue qprev on qprev.name = q.name and qprev.id < q.id
+            where
+              qprev.id is null
+              and (q.last_request_start is null or q.last_request_start <= q.last_request_date)
+              and (q.last_request_date is null or FROM_UNIXTIME(unix_timestamp(q.last_request_date) + pow(q.tries, 2.5)) < now())
+              {$conditions}
+              order by q.priority desc, q.id asc limit 1
+        ", [
+            'downHosts' => $downHosts
+        ], [
+            'downHosts' => Connection::PARAM_STR_ARRAY
+        ]);
+        if (!empty($request) && !empty($request['id'])) {
+            $requestStart = date('Y-m-d H:i:s');
+            $this->conn->update('xmlrpc_queue', [ 'last_request_start' => $requestStart, 'last_request_date' => null ], [ 'id' => $request['id'] ]);
+            $request['last_request_start'] = $requestStart;
+        } else {
+            $request = null;
+        }
+        $releaseResult = $this->conn->fetchColumn('select RELEASE_LOCK(\'evil\')');
+        if (empty($releaseResult)) {
+            $this->logger->alert('Cannot release "evil" lock');
+        }
+        return $request;
     }
 
     protected function executeRequest($request)

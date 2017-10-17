@@ -57,21 +57,31 @@ class RunnerService
 
     protected function getNextRequest()
     {
+        $downHosts = [ ];
+        $downHostsRaw = $this->conn->fetchAll('select host from xmlrpc_host_down where down_untill is not null and down_untill > NOW()');
+        foreach ($downHostsRaw as $row) {
+            $downHosts[] = $row['host'];
+        }
+        $this->conn->beginTransaction();
         try {
-            $this->conn->beginTransaction();
-                $request = $this->conn->fetchAssoc("
+            $conditions = '';
+            if (!empty($downHosts)) $conditions .= " and SUBSTRING(q.url from 1 for locate('/', q.url, 10) - 1) not in (:downHosts)";
+            if ($this->isPriority) $conditions .= ' and q.priority > 0';
+            $request = $this->conn->fetchAssoc("
                 select q.*
                 from xmlrpc_queue q
                 left join xmlrpc_queue qprev on qprev.name = q.name and qprev.id < q.id
-                left join xmlrpc_host_down h on h.host = SUBSTRING(q.url from 1 for locate('/', q.url, 10) - 1)
                 where
                   qprev.id is null
                   and (q.last_request_start is null or q.last_request_start <= q.last_request_date)
                   and (q.last_request_date is null or FROM_UNIXTIME(unix_timestamp(q.last_request_date) + pow(q.tries, 2.5)) < now())
-                  and (h.down_untill is null or h.down_untill < NOW())
-                  " . ($this->isPriority ? 'and q.priority > 0' : '') . "
-                order by q.priority desc, q.id asc limit 1 for update;
-            ");
+                  {$conditions}
+                  order by q.priority desc, q.id asc limit 1 for update;
+            ", [
+                'downHosts' => $downHosts
+            ], [
+                'downHosts' => Connection::PARAM_STR_ARRAY
+            ]);
             if (!empty($request) && !empty($request['id'])) {
                 $requestStart = date('Y-m-d H:i:s');
                 $this->conn->update('xmlrpc_queue', [ 'last_request_start' => $requestStart, 'last_request_date' => null ], [ 'id' => $request['id'] ]);
@@ -82,8 +92,12 @@ class RunnerService
             $this->conn->commit();
             return $request;
         } catch (DeadlockException $exception) {
+            $this->conn->rollBack();
+            sleep(random_int(1, 3));
             return null;
         } catch (LockWaitTimeoutException $exception) {
+            $this->conn->rollBack();
+            sleep(random_int(1, 3));
             return null;
         }
     }

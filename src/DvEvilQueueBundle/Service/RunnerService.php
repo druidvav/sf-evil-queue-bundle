@@ -68,6 +68,7 @@ class RunnerService
         $lockResult = $this->conn->fetchColumn('select GET_LOCK(\'evil\', 5)');
         if (empty($lockResult)) {
             $this->logger->alert('Cannot obtain "evil" lock');
+            return null;
         }
         $request = $this->conn->fetchAssoc("
             select q.*

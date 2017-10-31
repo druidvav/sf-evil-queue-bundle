@@ -20,7 +20,7 @@ class RunnerService
     protected static $triesTillBan = 29;
     protected static $banPeriod = '+10 minutes';
 
-    const HOST_EXPR = 'select SUBSTRING(:url from 1 for position(\'/\' in SUBSTRING(:url from 10)) + 8)';
+    const HOST_EXPR = 'SUBSTRING(:url from 1 for position(\'/\' in SUBSTRING(:url from 10)) + 8)';
 
     public function __construct(Connection $connection)
     {

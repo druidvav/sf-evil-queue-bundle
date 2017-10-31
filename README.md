@@ -6,7 +6,7 @@
 dv_evil_queue:
     debug: "%kernel.debug%"
     connection: "@doctrine.dbal.xmlrpc_connection"
-    logger: "@monolog.logger.console"
+    logger: "@monolog.logger.evil"
     workers: 10
     priority_workers: 5
 ```

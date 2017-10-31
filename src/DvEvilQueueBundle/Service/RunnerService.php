@@ -1,8 +1,6 @@
 <?php
 namespace DvEvilQueueBundle\Service;
 
-use Doctrine\DBAL\Exception\DeadlockException;
-use Doctrine\DBAL\Exception\LockWaitTimeoutException;
 use DvEvilQueueBundle\Service\Caller\Request;
 use Exception;
 use Doctrine\DBAL\Connection;
@@ -20,7 +18,9 @@ class RunnerService
     protected static $defaultPause = 200000;
     protected static $waitingPause = 1000000;
     protected static $triesTillBan = 29;
-    protected static $banPeriod = '+1 hour';
+    protected static $banPeriod = '+10 minutes';
+
+    const HOST_EXPR = 'select SUBSTRING(:url from 1 for position(\'/\' in SUBSTRING(:url from 10)) + 8)';
 
     public function __construct(Connection $connection)
     {
@@ -57,14 +57,7 @@ class RunnerService
 
     protected function getNextRequest()
     {
-        $downHosts = [ ];
-        $downHostsRaw = $this->conn->fetchAll('select host from xmlrpc_host_down where down_untill is not null and down_untill > NOW()');
-        foreach ($downHostsRaw as $row) {
-            $downHosts[] = $row['host'];
-        }
-        $conditions = '';
-        if (!empty($downHosts)) $conditions .= " and SUBSTRING(q.url from 1 for locate('/', q.url, 10) - 1) not in (:downHosts)";
-        if ($this->isPriority) $conditions .= ' and q.priority > 0';
+        $conditions = $this->isPriority ? ' and q.priority > 0' : '';
         $lockResult = $this->conn->fetchColumn('select GET_LOCK(\'evil\', 5)');
         if (empty($lockResult)) {
             $this->logger->alert('Cannot obtain "evil" lock');
@@ -74,17 +67,15 @@ class RunnerService
             select q.*
             from xmlrpc_queue q
             left join xmlrpc_queue qprev on qprev.name = q.name and qprev.id < q.id
+            left join xmlrpc_host_down h on h.host = " . str_replace(':url', 'q.url', self::HOST_EXPR) . "
             where
               qprev.id is null
               and (q.last_request_start is null or q.last_request_start <= q.last_request_date)
               and (q.last_request_date is null or FROM_UNIXTIME(unix_timestamp(q.last_request_date) + pow(q.tries, 2.5)) < now())
+              and (h.down_untill is null or h.down_untill < NOW())
               {$conditions}
               order by q.priority desc, q.id asc limit 1
-        ", [
-            'downHosts' => $downHosts
-        ], [
-            'downHosts' => Connection::PARAM_STR_ARRAY
-        ]);
+        ");
         if (!empty($request) && !empty($request['id'])) {
             $requestStart = date('Y-m-d H:i:s');
             $this->conn->update('xmlrpc_queue', [ 'last_request_start' => $requestStart, 'last_request_date' => null ], [ 'id' => $request['id'] ]);
@@ -112,8 +103,6 @@ class RunnerService
 
             if (in_array($status, [ 'ok', 'warning' ])) {
                 $this->handleSuccess($request, $response);
-            } elseif (in_array($status, [ 'wait' ])) {
-                $this->handleWaiting($request, $response, $lastOutput);
             } else {
                 $this->handleError($request, $response, $lastOutput);
             }
@@ -135,9 +124,10 @@ class RunnerService
     {
         try {
             $request['tries']++;
-            $request['last_output'] = null;
             $request['last_response'] = json_encode($response, JSON_UNESCAPED_UNICODE);
             $request['last_request_date'] = date('Y-m-d H:i:s');
+            unset($request['next_request_date']);
+            unset($request['last_output']);
             if (!empty($request)) {
                 $request['worker_code'] = $this->cWorker . ($this->isPriority ? ' (p)' : '');
                 $this->conn->insert('xmlrpc_queue_complete', $request);
@@ -148,29 +138,23 @@ class RunnerService
         $this->conn->delete('xmlrpc_queue', [ 'id' => $request['id'] ]);
     }
 
-    protected function handleWaiting($request, $response, $lastOutput = '')
-    {
-        $this->conn->executeUpdate('UPDATE xmlrpc_queue SET tries = tries + 1, last_output = :last_output, last_response = :last_response, last_request_date = now() WHERE id = :id', [
-            'id' => $request['id'],
-            'last_output' => $lastOutput,
-            'last_response' => json_encode($response, JSON_UNESCAPED_UNICODE),
-        ]);
-    }
-
     protected function handleError($request, $response, $lastOutput = '')
     {
-        $this->conn->executeUpdate('UPDATE xmlrpc_queue SET tries = tries + 1, last_output = :last_output, last_response = :last_response, last_request_date = now() WHERE id = :id', [
-            'id' => $request['id'],
-            'last_output' => json_encode($lastOutput, JSON_UNESCAPED_UNICODE),
+        $update = [
+            'tries' => $request['tries'] + 1,
+            'last_output' => $lastOutput,
             'last_response' => json_encode($response, JSON_UNESCAPED_UNICODE),
-        ]);
+            'last_request_date' => date('Y-m-d H:i:s')
+        ];
+        if (array_key_exists('next_request_date', $request)) {
+            $update['next_request_date'] = date('Y-m-d H:i:s', time() + pow($update['tries'], 2.5));
+        }
+        $this->conn->update('xmlrpc_queue', $update, [ 'id' => $request['id'] ]);
     }
 
     protected function resetFailCounter($request)
     {
-        $host = $this->conn->fetchColumn('select SUBSTRING(:url from 1 for locate(\'/\', :url, 10) - 1)', [
-            'url' => $request['url']
-        ]);
+        $host = $this->conn->fetchColumn('select ' . self::HOST_EXPR, [ 'url' => $request['url'] ]);
         $this->conn->executeUpdate('update xmlrpc_host_down set down_since = null, down_untill = null, fails = 0 where host = :host', [
             'host' => $host
         ]);
@@ -178,21 +162,18 @@ class RunnerService
 
     protected function increaseFailCounter($request)
     {
-        $host = $this->conn->fetchColumn('select SUBSTRING(:url from 1 for locate(\'/\', :url, 10) - 1)', [
-            'url' => $request['url']
-        ]);
-
+        $host = $this->conn->fetchColumn('select ' . self::HOST_EXPR, [ 'url' => $request['url'] ]);
         $hostRow = $this->conn->fetchAssoc('select * from xmlrpc_host_down where host = :host', [ 'host' => $host ]);
         if (empty($hostRow)) {
             $this->conn->executeUpdate('insert into xmlrpc_host_down (host, down_since, down_untill, fails) values (:host, now(), null, 1)', [ 'host' => $host ]);
         } else {
             $this->conn->executeUpdate('update xmlrpc_host_down set down_since = coalesce(down_since, now()), fails = fails + 1 where host = :host', [ 'host' => $host ]);
-        }
-        if ($hostRow['fails'] > self::$triesTillBan) {
-            $this->conn->executeUpdate('update xmlrpc_host_down set down_untill = :until, fails = 0 where host = :host', [
-                ':host' => $host,
-                'until' => date('Y-m-d H:i:s', strtotime(self::$banPeriod))
-            ]);
+            if ($hostRow['fails'] > self::$triesTillBan) {
+                $this->conn->executeUpdate('update xmlrpc_host_down set down_untill = :until, fails = 0 where host = :host', [
+                    ':host' => $host,
+                    'until' => date('Y-m-d H:i:s', strtotime(self::$banPeriod))
+                ]);
+            }
         }
     }
 }

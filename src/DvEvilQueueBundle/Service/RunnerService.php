@@ -20,6 +20,7 @@ class RunnerService
     protected static $triesTillBan = 29;
     protected static $banPeriod = '+10 minutes';
 
+    const LOCK_ID = 'evil';
     const HOST_EXPR = 'SUBSTRING(:url from 1 for position(\'/\' in SUBSTRING(:url from 10)) + 8)';
 
     public function __construct(Connection $connection)
@@ -57,8 +58,7 @@ class RunnerService
 
     protected function getNextRequest()
     {
-        $lockResult = $this->conn->fetchColumn('select GET_LOCK(\'evil\', 5)');
-        if (empty($lockResult)) {
+        if (!$this->obtainLock()) {
             $this->logger->alert('Cannot obtain "evil" lock');
             return null;
         }
@@ -83,11 +83,39 @@ class RunnerService
         } else {
             $request = null;
         }
-        $releaseResult = $this->conn->fetchColumn('select RELEASE_LOCK(\'evil\')');
-        if (empty($releaseResult)) {
+        if (!$this->releaseLock()) {
             $this->logger->alert('Cannot release "evil" lock');
         }
         return $request;
+    }
+
+    protected function obtainLock()
+    {
+        $driver = $this->conn->getDriver()->getName();
+        if ($driver == 'pdo_mysql') {
+            $lockResult = $this->conn->fetchColumn('select GET_LOCK(:id, 5)', [ 'id' => self::LOCK_ID ]);
+            return !empty($lockResult);
+        } elseif ($driver == 'pdo_pgsql') {
+            $this->conn->beginTransaction();
+            $this->conn->executeQuery('select pg_advisory_xact_lock(:id)', [ 'id' => self::LOCK_ID ]);
+            return true;
+        } else {
+            throw new \Exception('Unknown database driver: ' . $driver);
+        }
+    }
+
+    protected function releaseLock()
+    {
+        $driver = $this->conn->getDriver()->getName();
+        if ($driver == 'pdo_mysql') {
+            $releaseResult = $this->conn->fetchColumn('select RELEASE_LOCK(:id)', [ 'id' => self::LOCK_ID ]);
+            return !empty($releaseResult);
+        } elseif ($driver == 'pdo_pgsql') {
+            $this->conn->commit();
+            return true;
+        } else {
+            throw new \Exception('Unknown database driver: ' . $driver);
+        }
     }
 
     protected function executeRequest($request)

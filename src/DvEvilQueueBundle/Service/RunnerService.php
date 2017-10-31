@@ -57,12 +57,12 @@ class RunnerService
 
     protected function getNextRequest()
     {
-        $conditions = $this->isPriority ? ' and q.priority > 0' : '';
         $lockResult = $this->conn->fetchColumn('select GET_LOCK(\'evil\', 5)');
         if (empty($lockResult)) {
             $this->logger->alert('Cannot obtain "evil" lock');
             return null;
         }
+        $conditions = $this->isPriority ? ' and q.priority > 0' : '';
         $request = $this->conn->fetchAssoc("
             select q.*
             from xmlrpc_queue q
@@ -71,14 +71,14 @@ class RunnerService
             where
               qprev.id is null
               and (q.last_request_start is null or q.last_request_start <= q.last_request_date)
-              and (q.last_request_date is null or FROM_UNIXTIME(unix_timestamp(q.last_request_date) + pow(q.tries, 2.5)) < now())
+              and (q.next_request_date is null or q.next_request_date <= now())
               and (h.down_untill is null or h.down_untill < NOW())
               {$conditions}
               order by q.priority desc, q.id asc limit 1
         ");
         if (!empty($request) && !empty($request['id'])) {
             $requestStart = date('Y-m-d H:i:s');
-            $this->conn->update('xmlrpc_queue', [ 'last_request_start' => $requestStart, 'last_request_date' => null ], [ 'id' => $request['id'] ]);
+            $this->conn->update('xmlrpc_queue', [ 'last_request_start' => $requestStart, 'last_request_date' => null, 'next_request_date' => null ], [ 'id' => $request['id'] ]);
             $request['last_request_start'] = $requestStart;
         } else {
             $request = null;
@@ -140,16 +140,13 @@ class RunnerService
 
     protected function handleError($request, $response, $lastOutput = '')
     {
-        $update = [
+        $this->conn->update('xmlrpc_queue', [
             'tries' => $request['tries'] + 1,
-            'last_output' => $lastOutput,
+            'last_output' => json_encode($lastOutput, JSON_UNESCAPED_UNICODE),
             'last_response' => json_encode($response, JSON_UNESCAPED_UNICODE),
-            'last_request_date' => date('Y-m-d H:i:s')
-        ];
-        if (array_key_exists('next_request_date', $request)) {
-            $update['next_request_date'] = date('Y-m-d H:i:s', time() + pow($update['tries'], 2.5));
-        }
-        $this->conn->update('xmlrpc_queue', $update, [ 'id' => $request['id'] ]);
+            'last_request_date' => date('Y-m-d H:i:s'),
+            'next_request_date' => date('Y-m-d H:i:s', time() + pow($request['tries'] + 1, 2.5)),
+        ], [ 'id' => $request['id'] ]);
     }
 
     protected function resetFailCounter($request)

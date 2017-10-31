@@ -49,7 +49,7 @@ class RunnerService
             $this->executeRequest($requestData);
             $pause = self::$defaultPause;
         } else {
-            $this->logger->info("Nothing found, sleeping...");
+            $this->logger->debug("Nothing found, sleeping...");
             $pause = self::$waitingPause;
         }
         usleep($pause);
@@ -120,7 +120,7 @@ class RunnerService
             $this->resetFailCounter($request);
 
             $runtime = round(microtime(true) - $start, 3);
-            $this->logger->info("Query {$status}: {$runtime}sec");
+            $this->logger->debug("Query {$status}: {$runtime}sec");
         } catch (Exception $e) {
             $this->handleError($request, [
                 'status' => 'error',

@@ -21,6 +21,7 @@ class RunnerService
     protected static $banPeriod = '+10 minutes';
 
     const LOCK_ID = 'evil';
+    const LOCK_ID_INT = 57399031;
     const HOST_EXPR = 'SUBSTRING(:url from 1 for position(\'/\' in SUBSTRING(:url from 10)) + 8)';
 
     public function __construct(Connection $connection)
@@ -97,7 +98,7 @@ class RunnerService
             return !empty($lockResult);
         } elseif ($driver == 'pdo_pgsql') {
             $this->conn->beginTransaction();
-            $this->conn->executeQuery('select pg_advisory_xact_lock(:id)', [ 'id' => self::LOCK_ID ]);
+            $this->conn->executeQuery('select pg_advisory_xact_lock(:id)', [ 'id' => self::LOCK_ID_INT ]);
             return true;
         } else {
             throw new \Exception('Unknown database driver: ' . $driver);

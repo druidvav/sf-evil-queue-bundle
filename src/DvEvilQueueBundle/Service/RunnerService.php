@@ -75,7 +75,7 @@ class RunnerService
               and (q.next_request_date is null or q.next_request_date <= now())
               and (h.down_untill is null or h.down_untill < NOW())
               {$conditions}
-              order by q.priority desc, q.id asc limit 1
+              order by q.id asc limit 1
         ");
         if (!empty($request) && !empty($request['id'])) {
             $requestStart = date('Y-m-d H:i:s');

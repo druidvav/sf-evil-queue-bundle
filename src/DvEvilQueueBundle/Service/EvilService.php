@@ -19,6 +19,16 @@ class EvilService
         return $client->call($request);
     }
 
+    public function beginTransaction()
+    {
+        $this->conn->beginTransaction();
+    }
+
+    public function commit()
+    {
+        $this->conn->commit();
+    }
+
     public function enqueue(Request $request, $queueName = 'general', $priority = 0)
     {
         $this->conn->insert('xmlrpc_queue', [

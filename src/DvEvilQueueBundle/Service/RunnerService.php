@@ -1,6 +1,7 @@
 <?php
 namespace DvEvilQueueBundle\Service;
 
+use Doctrine\DBAL\Exception\UniqueConstraintViolationException;
 use DvEvilQueueBundle\Service\Caller\Request;
 use Exception;
 use Doctrine\DBAL\Connection;
@@ -105,11 +106,17 @@ class RunnerService
         }
         $start = microtime(true);
         $queueName = $this->getNextQueueName();
-        $requests = $this->getNextRequestsByQueueName($queueName);
+        $rawRequests = $this->getNextRequestsByQueueName($queueName);
         $requestStart = date('Y-m-d H:i:s');
-        foreach ($requests as &$request) {
-            $request['last_request_start'] = $requestStart;
-            $this->lockRequest($request);
+        $requests = [ ];
+        foreach ($rawRequests as $request) {
+            if (empty($request['last_request_start']) || (!empty($request['last_request_date']) && $request['last_request_start'] <= $request['last_request_date'])) {
+                $request['last_request_start'] = $requestStart;
+                $this->lockRequest($request);
+                $requests[] = $request;
+            } else {
+                break;
+            }
         }
         $runtime = round((microtime(true) - $start) * 1000);
         if ($runtime > 1000) {
@@ -131,7 +138,7 @@ class RunnerService
             return !empty($lockResult);
         } elseif ($driver == 'pdo_pgsql') {
             $this->conn->beginTransaction();
-            $retries = 500; // FIXME Tune this
+            $retries = 400; // FIXME Tune this
             do {
                 usleep(25000); // FIXME Tune this
                 $lockResult = $this->conn->fetchColumn('select pg_try_advisory_xact_lock(:id)', [ 'id' => self::LOCK_ID_INT ]);
@@ -139,8 +146,10 @@ class RunnerService
             } while (empty($lockResult) && $retries >= 0);
             if (empty($lockResult)) {
                 $this->conn->commit();
+                return false;
+            } else {
+                return true;
             }
-            return !empty($lockResult);
         } else {
             throw new \Exception('Unknown database driver: ' . $driver);
         }
@@ -208,11 +217,7 @@ class RunnerService
             $this->resetFailCounter($request);
         } catch (Exception $e) {
             $status = 'exception';
-            $this->handleError($request, [
-                'status' => 'error',
-                'type' => 'request error',
-                'message' => $e->getMessage(),
-            ]);
+            $this->handleError($request, [ 'status' => 'error', 'type' => 'request error', 'message' => $e->getMessage() ]);
             $this->increaseFailCounter($request);
             $return = false;
         }
@@ -234,6 +239,8 @@ class RunnerService
                 $request['worker_code'] = $this->cWorker . ($this->isPriority ? ' (p)' : '');
                 $this->conn->insert('xmlrpc_queue_complete', $request);
             }
+        } catch (UniqueConstraintViolationException $e) {
+            $this->logger->error('Duplicated request result', [ 'request' => $request ]);
         } catch (Exception $e) {
             $this->logger->error($e->getMessage(), [ 'exception' => $e ]);
         }
@@ -265,7 +272,7 @@ class RunnerService
     protected function resetFailCounter($request)
     {
         $host = $this->conn->fetchColumn('select ' . self::HOST_EXPR, [ 'url' => $request['url'] ]);
-        $this->conn->executeUpdate('update xmlrpc_host_down set down_since = null, down_untill = null, fails = 0 where host = :host', [
+        $this->conn->executeUpdate('update xmlrpc_host_down set down_since = null, down_untill = null, fails = 0 where host = :host and (fails <> 0 or down_untill is not null)', [
             'host' => $host
         ]);
     }

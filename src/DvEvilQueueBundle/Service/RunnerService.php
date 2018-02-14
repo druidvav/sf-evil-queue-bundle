@@ -48,10 +48,10 @@ class RunnerService
     public function tick()
     {
         if ($requestData = $this->getNextRequest()) {
-            $runtimeStart = microtime();
+            $runtimeStart = microtime(true);
             $this->executeRequest($requestData);
-            $runtime = microtime() - $runtimeStart;
-            $pause = max(self::$defaultPause, 1000000 - $runtime);
+            $runtime = microtime(true) - $runtimeStart;
+            $pause = max(self::$defaultPause, (1 - $runtime) * 1000000);
         } else {
             $this->logger->debug("Nothing found, sleeping...");
             $pause = self::$waitingPause;
@@ -123,7 +123,7 @@ class RunnerService
 
     protected function executeRequest($request)
     {
-        $start = microtime();
+        $start = microtime(true);
         $client = new ApiClient();
 
         try {
@@ -132,16 +132,13 @@ class RunnerService
             $lastOutput = $response['last_output'];
             unset($response['last_output']);
 
-            $runtime = microtime() - $start;
-
+            $runtime = round((microtime(true) - $start) * 1000);
             if (in_array($status, [ 'ok', 'warning' ])) {
                 $this->handleSuccess($request, $response, $runtime);
             } else {
                 $this->handleError($request, $response, $lastOutput);
             }
             $this->resetFailCounter($request);
-
-            $runtime = round((microtime() - $start) / 1000);
             $this->logger->debug("Query {$status}: {$runtime}ms");
         } catch (Exception $e) {
             $this->handleError($request, [

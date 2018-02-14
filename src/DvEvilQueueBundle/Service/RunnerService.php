@@ -145,9 +145,10 @@ class RunnerService
 
     protected function getNextRequestsByQueueName($queueName)
     {
-        return $this->conn->fetchAll("
-            select q.* from xmlrpc_queue q where q.name = :name order by q.id asc limit :limit
-        ", [ 'name' => $queueName, 'limit' => self::$maxRequestsByQueueName ]);
+        return $this->conn->fetchAll(
+            "select q.* from xmlrpc_queue q where q.name = :name order by q.id asc limit " . self::$maxRequestsByQueueName,
+            [ 'name' => $queueName ]
+        );
     }
 
     protected function executeRequest($request)

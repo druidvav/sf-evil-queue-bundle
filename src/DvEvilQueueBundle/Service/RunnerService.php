@@ -50,14 +50,16 @@ class RunnerService
     {
         if ($requestsData = $this->getNextRequest()) {
             foreach ($requestsData as $requestData) {
-                $this->executeRequest($requestData);
+                if (!$this->executeRequest($requestData)) {
+                    usleep(self::$defaultPause);
+                    return;
+                }
             }
-            $pause = self::$defaultPause;
+            usleep(self::$defaultPause);
         } else {
             $this->logger->debug("Nothing found, sleeping...");
-            $pause = self::$waitingPause;
+            usleep(self::$waitingPause);
         }
-        usleep($pause);
     }
 
     protected function getNextRequest()
@@ -162,8 +164,10 @@ class RunnerService
             $runtime = round((microtime(true) - $start) * 1000);
             if (in_array($status, [ 'ok', 'warning' ])) {
                 $this->handleSuccess($request, $response, $runtime);
+                $return = true;
             } else {
                 $this->handleError($request, $response, $lastOutput);
+                $return = false;
             }
             $this->resetFailCounter($request);
         } catch (Exception $e) {
@@ -174,9 +178,11 @@ class RunnerService
                 'message' => $e->getMessage(),
             ]);
             $this->increaseFailCounter($request);
+            $return = false;
         }
         $runtime = round((microtime(true) - $start) * 1000);
         $this->logger->debug("Query {$status}: {$runtime}ms");
+        return $return;
     }
 
     protected function handleSuccess($request, $response, $runtime)

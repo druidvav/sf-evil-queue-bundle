@@ -22,6 +22,8 @@ class QueueCommand extends Command
      */
     protected function execute(InputInterface $input, OutputInterface $output)
     {
+        declare(ticks = 1);
+        
         $workersRegular = $this->getContainer()->getParameter('evil_queue.workers');
         $workersPriority = $this->getContainer()->getParameter('evil_queue.priority_workers');
 

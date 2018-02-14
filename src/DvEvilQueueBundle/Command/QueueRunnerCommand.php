@@ -26,8 +26,10 @@ class QueueRunnerCommand extends Command
      */
     protected function execute(InputInterface $input, OutputInterface $output)
     {
+        declare(ticks = 1);
+
         $runtimeStart = time();
-        $log = $this->getLogger();
+        $log = $this->getContainer()->get('evil_logger');
         $cWorker = $input->getArgument('worker');
         $isPriority = $input->getOption('priority') === true;
         $evilQueue = $this->getContainer()->get('evil_queue');

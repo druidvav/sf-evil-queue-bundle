@@ -1,6 +1,8 @@
 <?php
 namespace DvEvilQueueBundle\Service;
 
+use Doctrine\DBAL\DBALException;
+use Doctrine\DBAL\Exception\DriverException;
 use DvEvilQueueBundle\Service\Caller\Request;
 use Exception;
 use Doctrine\DBAL\Connection;
@@ -15,8 +17,8 @@ class RunnerService
     protected $cWorker = 0;
     protected $isPriority = 1;
 
-    protected static $defaultPause = 200000;
-    protected static $waitingPause = 1000000;
+    protected static $defaultPause = 50000;
+    protected static $waitingPause = 500000;
     protected static $triesTillBan = 29;
     protected static $banPeriod = '+10 minutes';
 
@@ -65,6 +67,7 @@ class RunnerService
             $this->logger->alert('Cannot obtain "evil" lock');
             return null;
         }
+        $start = microtime(true);
         $conditions = $this->isPriority ? ' and q.priority > 0' : '';
         $request = $this->conn->fetchAssoc("
             select q.*
@@ -86,9 +89,15 @@ class RunnerService
         } else {
             $request = null;
         }
+        $runtime = round((microtime(true) - $start) * 1000);
+        if ($runtime > 1000) {
+            $this->logger->alert('Slow job acquiring time', [ 'time' => $runtime . 'ms' ]);
+        }
         if (!$this->releaseLock()) {
             $this->logger->alert('Cannot release "evil" lock');
         }
+        $runtime = round((microtime(true) - $start) * 1000);
+        $this->logger->debug("Got job: {$runtime}ms");
         return $request;
     }
 
@@ -100,8 +109,16 @@ class RunnerService
             return !empty($lockResult);
         } elseif ($driver == 'pdo_pgsql') {
             $this->conn->beginTransaction();
-            $this->conn->executeQuery('select pg_advisory_xact_lock(:id)', [ 'id' => self::LOCK_ID_INT ]);
-            return true;
+            $retries = 500;
+            do {
+                usleep(25000);
+                $lockResult = $this->conn->fetchColumn('select pg_try_advisory_xact_lock(:id)', [ 'id' => self::LOCK_ID_INT ]);
+                $retries--;
+            } while (empty($lockResult) && $retries >= 0);
+            if (empty($lockResult)) {
+                $this->conn->commit();
+            }
+            return !empty($lockResult);
         } else {
             throw new \Exception('Unknown database driver: ' . $driver);
         }
@@ -139,8 +156,8 @@ class RunnerService
                 $this->handleError($request, $response, $lastOutput);
             }
             $this->resetFailCounter($request);
-            $this->logger->debug("Query {$status}: {$runtime}ms");
         } catch (Exception $e) {
+            $status = 'exception';
             $this->handleError($request, [
                 'status' => 'error',
                 'type' => 'request error',
@@ -148,6 +165,8 @@ class RunnerService
             ]);
             $this->increaseFailCounter($request);
         }
+        $runtime = round((microtime(true) - $start) * 1000);
+        $this->logger->debug("Query {$status}: {$runtime}ms");
     }
 
     protected function handleSuccess($request, $response, $runtime)

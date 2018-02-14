@@ -46,20 +46,55 @@ class RunnerService
         $this->isPriority = $isPriority;
     }
 
-    public function tick()
+    public function run()
     {
-        if ($requestsData = $this->getNextRequest()) {
-            foreach ($requestsData as $requestData) {
-                if (!$this->executeRequest($requestData)) {
-                    usleep(self::$defaultPause);
-                    return;
-                }
-            }
-            usleep(self::$defaultPause);
-        } else {
-            $this->logger->debug("Nothing found, sleeping...");
-            usleep(self::$waitingPause);
+        declare(ticks = 1);
+
+        $runtimeStart = time();
+        $running = true;
+
+        pcntl_signal(SIGINT, function () use (&$running) {
+            $this->logger->info('Got SIGINT, stopping...');
+            $running = false;
+        });
+
+        pcntl_signal(SIGTERM, function () use (&$running) {
+            $this->logger->info('Got SIGTERM, stopping...');
+            $running = false;
+        });
+
+        $tmpDir = sys_get_temp_dir();
+        if ($this->getDebug() && !is_writable($tmpDir)) {
+            throw new \Exception('Temporary directory is not writable');
         }
+
+        $this->logger->info('Worker started: #' . $this->cWorker);
+        while ($running) {
+            if ($requestsData = $this->getNextRequest()) {
+                $ok = true;
+                foreach ($requestsData as $requestData) {
+                    if ($ok && $running) {
+                        $ok = $this->executeRequest($requestData);
+                    } else {
+                        $this->unlockRequest($requestData);
+                    }
+                }
+                usleep(self::$defaultPause);
+            } else {
+                $this->logger->debug("Nothing found, sleeping...");
+                usleep(self::$waitingPause);
+            }
+            if ($this->getDebug()) {
+                $memoryUsage      = memory_get_usage();
+                $runtime          = time() - $runtimeStart;
+                $memoryPeakUsage  = memory_get_peak_usage();
+                $stat = "Runtime: {$runtime}sec; Memory Usage: {$memoryUsage}b, peak: {$memoryPeakUsage}b";
+                file_put_contents($tmpDir . '/evil_thread_' . $this->cWorker, $stat);
+                $this->logger->debug($stat);
+            }
+            pcntl_signal_dispatch();
+        }
+        $this->logger->info('Worker stopped: #' . $this->cWorker);
     }
 
     protected function getNextRequest()
@@ -73,8 +108,8 @@ class RunnerService
         $requests = $this->getNextRequestsByQueueName($queueName);
         $requestStart = date('Y-m-d H:i:s');
         foreach ($requests as &$request) {
-            $this->conn->update('xmlrpc_queue', [ 'last_request_start' => $requestStart, 'last_request_date' => null, 'next_request_date' => null ], [ 'id' => $request['id'] ]);
             $request['last_request_start'] = $requestStart;
+            $this->lockRequest($request);
         }
         $runtime = round((microtime(true) - $start) * 1000);
         if ($runtime > 1000) {
@@ -214,6 +249,17 @@ class RunnerService
             'last_request_date' => date('Y-m-d H:i:s'),
             'next_request_date' => date('Y-m-d H:i:s', time() + pow($request['tries'] + 1, 2.5)),
         ], [ 'id' => $request['id'] ]);
+    }
+
+    protected function lockRequest($request)
+    {
+        $this->conn->update('xmlrpc_queue', [ 'last_request_start' => $request['last_request_start'], 'last_request_date' => null, 'next_request_date' => null ], [ 'id' => $request['id'] ]);
+    }
+
+    protected function unlockRequest($request)
+    {
+        $this->conn->update('xmlrpc_queue', [ 'last_request_start' => null ], [ 'id' => $request['id'] ]);
+        $this->logger->debug('Unlocking ' . $request['id']);
     }
 
     protected function resetFailCounter($request)

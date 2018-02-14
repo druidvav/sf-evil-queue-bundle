@@ -1,8 +1,6 @@
 <?php
 namespace DvEvilQueueBundle\Service;
 
-use Doctrine\DBAL\DBALException;
-use Doctrine\DBAL\Exception\DriverException;
 use DvEvilQueueBundle\Service\Caller\Request;
 use Exception;
 use Doctrine\DBAL\Connection;
@@ -21,6 +19,7 @@ class RunnerService
     protected static $waitingPause = 500000;
     protected static $triesTillBan = 29;
     protected static $banPeriod = '+10 minutes';
+    protected static $maxRequestsByQueueName = 15;
 
     const LOCK_ID = 'evil';
     const LOCK_ID_INT = 57399031;
@@ -49,11 +48,11 @@ class RunnerService
 
     public function tick()
     {
-        if ($requestData = $this->getNextRequest()) {
-            $runtimeStart = microtime(true);
-            $this->executeRequest($requestData);
-            $runtime = microtime(true) - $runtimeStart;
-            $pause = max(self::$defaultPause, (1 - $runtime) * 1000000);
+        if ($requestsData = $this->getNextRequest()) {
+            foreach ($requestsData as $requestData) {
+                $this->executeRequest($requestData);
+            }
+            $pause = self::$defaultPause;
         } else {
             $this->logger->debug("Nothing found, sleeping...");
             $pause = self::$waitingPause;
@@ -68,26 +67,12 @@ class RunnerService
             return null;
         }
         $start = microtime(true);
-        $conditions = $this->isPriority ? ' and q.priority > 0' : '';
-        $request = $this->conn->fetchAssoc("
-            select q.*
-            from xmlrpc_queue q
-            left join xmlrpc_queue qprev on qprev.name = q.name and qprev.id < q.id
-            left join xmlrpc_host_down h on h.host = " . str_replace(':url', 'q.url', self::HOST_EXPR) . "
-            where
-              qprev.id is null
-              and (q.last_request_start is null or q.last_request_start <= q.last_request_date)
-              and (q.next_request_date is null or q.next_request_date <= now())
-              and (h.down_untill is null or h.down_untill < NOW())
-              {$conditions}
-            order by q.id asc limit 1
-        ");
-        if (!empty($request) && !empty($request['id'])) {
-            $requestStart = date('Y-m-d H:i:s');
+        $queueName = $this->getNextQueueName();
+        $requests = $this->getNextRequestsByQueueName($queueName);
+        $requestStart = date('Y-m-d H:i:s');
+        foreach ($requests as &$request) {
             $this->conn->update('xmlrpc_queue', [ 'last_request_start' => $requestStart, 'last_request_date' => null, 'next_request_date' => null ], [ 'id' => $request['id'] ]);
             $request['last_request_start'] = $requestStart;
-        } else {
-            $request = null;
         }
         $runtime = round((microtime(true) - $start) * 1000);
         if ($runtime > 1000) {
@@ -98,7 +83,7 @@ class RunnerService
         }
         $runtime = round((microtime(true) - $start) * 1000);
         $this->logger->debug("Got job: {$runtime}ms");
-        return $request;
+        return $requests;
     }
 
     protected function obtainLock()
@@ -109,9 +94,9 @@ class RunnerService
             return !empty($lockResult);
         } elseif ($driver == 'pdo_pgsql') {
             $this->conn->beginTransaction();
-            $retries = 500;
+            $retries = 500; // FIXME Tune this
             do {
-                usleep(25000);
+                usleep(25000); // FIXME Tune this
                 $lockResult = $this->conn->fetchColumn('select pg_try_advisory_xact_lock(:id)', [ 'id' => self::LOCK_ID_INT ]);
                 $retries--;
             } while (empty($lockResult) && $retries >= 0);
@@ -136,6 +121,31 @@ class RunnerService
         } else {
             throw new \Exception('Unknown database driver: ' . $driver);
         }
+    }
+
+    protected function getNextQueueName()
+    {
+        $conditions = $this->isPriority ? ' and q.priority > 0' : '';
+        return $this->conn->fetchColumn("
+            select q.name
+            from xmlrpc_queue q
+            left join xmlrpc_queue qprev on qprev.name = q.name and qprev.id < q.id
+            left join xmlrpc_host_down h on h.host = " . str_replace(':url', 'q.url', self::HOST_EXPR) . "
+            where
+              qprev.id is null
+              and (q.last_request_start is null or q.last_request_start <= q.last_request_date)
+              and (q.next_request_date is null or q.next_request_date <= now())
+              and (h.down_untill is null or h.down_untill < NOW())
+              {$conditions}
+            order by q.id asc limit 1
+        ");
+    }
+
+    protected function getNextRequestsByQueueName($queueName)
+    {
+        return $this->conn->fetchAll("
+            select q.* from xmlrpc_queue q where q.name = :name order by q.id asc limit :limit
+        ", [ 'name' => $queueName, 'limit' => self::$maxRequestsByQueueName ]);
     }
 
     protected function executeRequest($request)

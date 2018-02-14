@@ -48,8 +48,10 @@ class RunnerService
     public function tick()
     {
         if ($requestData = $this->getNextRequest()) {
+            $runtimeStart = microtime();
             $this->executeRequest($requestData);
-            $pause = self::$defaultPause;
+            $runtime = microtime() - $runtimeStart;
+            $pause = max(self::$defaultPause, 1000000 - $runtime);
         } else {
             $this->logger->debug("Nothing found, sleeping...");
             $pause = self::$waitingPause;
@@ -75,7 +77,7 @@ class RunnerService
               and (q.next_request_date is null or q.next_request_date <= now())
               and (h.down_untill is null or h.down_untill < NOW())
               {$conditions}
-              order by q.id asc limit 1
+            order by q.id asc limit 1
         ");
         if (!empty($request) && !empty($request['id'])) {
             $requestStart = date('Y-m-d H:i:s');
@@ -121,7 +123,7 @@ class RunnerService
 
     protected function executeRequest($request)
     {
-        $start = microtime(true);
+        $start = microtime();
         $client = new ApiClient();
 
         try {
@@ -130,15 +132,17 @@ class RunnerService
             $lastOutput = $response['last_output'];
             unset($response['last_output']);
 
+            $runtime = microtime() - $start;
+
             if (in_array($status, [ 'ok', 'warning' ])) {
-                $this->handleSuccess($request, $response);
+                $this->handleSuccess($request, $response, $runtime);
             } else {
                 $this->handleError($request, $response, $lastOutput);
             }
             $this->resetFailCounter($request);
 
-            $runtime = round(microtime(true) - $start, 3);
-            $this->logger->debug("Query {$status}: {$runtime}sec");
+            $runtime = round((microtime() - $start) / 1000);
+            $this->logger->debug("Query {$status}: {$runtime}ms");
         } catch (Exception $e) {
             $this->handleError($request, [
                 'status' => 'error',
@@ -149,12 +153,13 @@ class RunnerService
         }
     }
 
-    protected function handleSuccess($request, $response)
+    protected function handleSuccess($request, $response, $runtime)
     {
         try {
             $request['tries']++;
             $request['last_response'] = json_encode($response, JSON_UNESCAPED_UNICODE);
             $request['last_request_date'] = date('Y-m-d H:i:s');
+            $request['comment'] = $runtime . ($request['comment'] ? ' ' . $request['comment'] : '');
             unset($request['next_request_date']);
             unset($request['last_output']);
             if (!empty($request)) {

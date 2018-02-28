@@ -45,6 +45,7 @@ class DvEvilQueueExtension extends Extension
 
         $optionDef = new Definition('DvEvilQueueBundle\Service\EvilService');
         $optionDef->addArgument($connectionRef);
+        $optionDef->setPublic(true);
         $container->setDefinition('evil', $optionDef);
 
         $container->setAlias('evil_logger', str_replace('@', '', $config['logger']));

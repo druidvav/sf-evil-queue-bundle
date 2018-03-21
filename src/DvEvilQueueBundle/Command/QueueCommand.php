@@ -27,6 +27,8 @@ class QueueCommand extends Command
         $workersRegular = $this->getContainer()->getParameter('evil_queue.workers');
         $workersPriority = $this->getContainer()->getParameter('evil_queue.priority_workers');
 
+        $this->getContainer()->get('evil')->fixAutoIncrement();
+
         $master = new ConsoleWorkerManager();
         $master->setLogger($this->getContainer()->get('evil_logger'));
         $master->setEnv($this->getContainer()->get('kernel')->getEnvironment());

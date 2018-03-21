@@ -58,4 +58,18 @@ class EvilService
     {
         $this->conn->delete('xmlrpc_queue', [ 'name' => $queueName ]);
     }
+
+    public function fixAutoIncrement()
+    {
+        $driver = $this->conn->getDriver()->getName();
+        if ($driver == 'pdo_mysql') {
+            $value = $this->conn->fetchColumn('select coalesce(max(id) + 500, 1) from xmlrpc_queue_complete');
+            $this->conn->executeQuery('ALTER TABLE xmlrpc.xmlrpc_queue AUTO_INCREMENT = ' . $value);
+            return true;
+        } elseif ($driver == 'pdo_pgsql') {
+            return true;
+        } else {
+            throw new \Exception('Unknown database driver: ' . $driver);
+        }
+    }
 }

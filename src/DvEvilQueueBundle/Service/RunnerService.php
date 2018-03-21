@@ -15,7 +15,9 @@ class RunnerService
     protected $debug = false;
     protected $cWorker = 0;
     protected $isPriority = 1;
+    protected $counter = 0;
 
+    const RESTART_AFTER_JOBS = 500;
     protected static $defaultPause = 50000;
     protected static $waitingPause = 500000;
     protected static $triesTillBan = 29;
@@ -70,7 +72,7 @@ class RunnerService
         }
 
         $this->logger->info('Worker started: #' . $this->cWorker);
-        while ($running) {
+        while ($running && $this->counter <= self::RESTART_AFTER_JOBS) {
             if ($requestsData = $this->getNextRequest()) {
                 $ok = true;
                 foreach ($requestsData as $requestData) {
@@ -127,6 +129,7 @@ class RunnerService
         }
         $runtime = round((microtime(true) - $start) * 1000);
         $this->logger->debug("Got job: {$runtime}ms");
+        $this->counter += sizeof($requests);
         return $requests;
     }
 

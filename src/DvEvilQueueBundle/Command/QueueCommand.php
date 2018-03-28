@@ -1,6 +1,7 @@
 <?php
 namespace DvEvilQueueBundle\Command;
 
+use Doctrine\DBAL\DBALException;
 use Druidvav\EssentialsBundle\Command;
 use Druidvav\EssentialsBundle\ConsoleWorkerManager;
 use Symfony\Component\Console\Input\InputInterface;
@@ -27,7 +28,21 @@ class QueueCommand extends Command
         $workersRegular = $this->getContainer()->getParameter('evil_queue.workers');
         $workersPriority = $this->getContainer()->getParameter('evil_queue.priority_workers');
 
-        $this->getContainer()->get('evil')->fixAutoIncrement();
+        while (true) {
+            try {
+                $this->getContainer()->get('evil')->fixAutoIncrement();
+                break;
+            } catch (DBALException $exception) {
+                if (preg_match('/An exception occured while establishing a connection to figure out your platform version/', $exception->getMessage())) {
+                    $this->getContainer()->get('evil_logger')->error('Error connecting to database, will try again', [
+                        'exception' => $exception
+                    ]);
+                } else {
+                    throw $exception;
+                }
+            }
+            sleep(10);
+        }
 
         $master = new ConsoleWorkerManager();
         $master->setLogger($this->getContainer()->get('evil_logger'));

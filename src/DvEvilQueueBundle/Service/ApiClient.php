@@ -1,21 +1,27 @@
 <?php
 namespace DvEvilQueueBundle\Service;
 
+use DvEvilQueueBundle\Exception\ApiClientException;
 use DvEvilQueueBundle\Service\Caller\Request;
 use Zend\Http\Request as HttpRequest;
 use Zend\XmlRpc\Client as XmlRpcClient;
 use Zend\Http\Client as HttpClient;
+use Zend\XmlRpc\Client\Exception\FaultException;
 
 class ApiClient
 {
     public function call(Request $request)
     {
-        if ($request->isHttp()) {
-            return $this->callHttp($request);
-        } elseif ($request->isJsonRpc()) {
-            return $this->callJsonRpc($request);
-        } else {
-            return $this->callXmlRpc($request);
+        try {
+            if ($request->isHttp()) {
+                return $this->callHttp($request);
+            } elseif ($request->isJsonRpc()) {
+                return $this->callJsonRpc($request);
+            } else {
+                return $this->callXmlRpc($request);
+            }
+        } catch (FaultException $e) {
+            throw new ApiClientException($e->getMessage(), $e->getCode(), $e);
         }
     }
 
@@ -89,11 +95,11 @@ class ApiClient
 
         $decodedResponse = @json_decode($response->getBody(), true);
         if (!is_array($decodedResponse)) {
-            return array(
+            return [
                 'status' => 'error',
                 'message' => 'Invalid response. The HTTP body should be a valid JSON.',
                 'last_output' => $response->getBody() ? $response->getBody() : '',
-            );
+            ];
         }
 
         $hasStatus = array_key_exists('result', $decodedResponse)

@@ -3,6 +3,7 @@ namespace DvEvilQueueBundle\Service;
 
 use DvEvilQueueBundle\Exception\ApiClientException;
 use DvEvilQueueBundle\Service\Caller\Request;
+use Zend\Http\Client\Exception\RuntimeException;
 use Zend\Http\Request as HttpRequest;
 use Zend\XmlRpc\Client as XmlRpcClient;
 use Zend\Http\Client as HttpClient;
@@ -20,6 +21,8 @@ class ApiClient
             } else {
                 return $this->callXmlRpc($request);
             }
+        } catch (RuntimeException $e) {
+            throw new ApiClientException($e->getMessage(), $e->getCode(), $e);
         } catch (FaultException $e) {
             throw new ApiClientException($e->getMessage(), $e->getCode(), $e);
         }

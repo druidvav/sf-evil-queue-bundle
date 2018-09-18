@@ -8,12 +8,14 @@
   },
   "require": {
     "php": ">=7.0.0",
+    "ext-pcntl": "*",
+    "ext-json": "*",
     "symfony/framework-bundle": "^3.2",
     "symfony/process": "^3.2",
     "symfony/console": "^3.2",
     "doctrine/dbal": "^2.5",
     "druidvav/essentials-bundle": "^1.5",
-    "zendframework/zend-xmlrpc": "^2.6"
+    "zendframework/zend-xmlrpc": "^2.7"
   },
   "require-dev": {
 

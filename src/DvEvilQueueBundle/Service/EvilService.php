@@ -29,6 +29,13 @@ class EvilService
         $this->conn->commit();
     }
 
+    public function rollback()
+    {
+        if ($this->conn->isTransactionActive()) {
+            $this->conn->rollback();
+        }
+    }
+
     public function enqueue(Request $request, $queueName = 'general', $priority = 0)
     {
         $this->conn->insert('xmlrpc_queue', [

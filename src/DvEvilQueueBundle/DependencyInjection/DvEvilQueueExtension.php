@@ -5,6 +5,7 @@ use DvEvilQueueBundle\Command\QueueCommand;
 use DvEvilQueueBundle\Command\QueueRunnerCommand;
 use DvEvilQueueBundle\Service\EvilService;
 use DvEvilQueueBundle\Service\RunnerService;
+use Exception;
 use Symfony\Component\DependencyInjection\Definition;
 use Symfony\Component\DependencyInjection\Reference;
 use Symfony\Component\HttpKernel\DependencyInjection\Extension;
@@ -16,7 +17,7 @@ class DvEvilQueueExtension extends Extension
      * @param  array $configs
      * @param  ContainerBuilder $container
      * @return void
-     * @throws \Exception
+     * @throws Exception
      */
     public function load(array $configs, ContainerBuilder $container)
     {
@@ -28,7 +29,7 @@ class DvEvilQueueExtension extends Extension
      *
      * @param array $configs
      * @param ContainerBuilder $container
-     * @throws \Exception
+     * @throws Exception
      */
     protected function loadConfiguration(array $configs, ContainerBuilder $container)
     {
@@ -58,13 +59,14 @@ class DvEvilQueueExtension extends Extension
         $optionDef->addMethodCall('setLogger', [ new Reference('evil_logger') ]);
         $optionDef->addMethodCall('setKernel', [ new Reference('kernel') ]);
         $optionDef->addMethodCall('setConfig', [ $config['workers'], $config['priority_workers'] ]);
+        $optionDef->addTag('console.command');
         $optionDef->setPublic(true);
         $container->setDefinition('evil.command.queue', $optionDef);
 
         $optionDef = new Definition(QueueRunnerCommand::class);
         $optionDef->addMethodCall('setRunner', [ new Reference('evil_queue') ]);
+        $optionDef->addTag('console.command');
         $optionDef->setPublic(true);
         $container->setDefinition('evil.command.queue_runner', $optionDef);
-
     }
 }

@@ -17,9 +17,10 @@ class RunnerService
     protected $isPriority = 1;
     protected $counter = 0;
 
-    const RESTART_AFTER_JOBS = 500;
-    protected static $defaultPause = 50000;
-    protected static $waitingPause = 500000;
+    protected $restartAfter = 500;
+    protected $usleepAfterRequest = 50000;
+    protected $usleepAfterEmpty = 2000000;
+
     protected static $triesTillBan = 29;
     protected static $banPeriod = '+10 minutes';
     protected static $maxRequestsByQueueName = 15;
@@ -31,6 +32,17 @@ class RunnerService
     public function __construct(Connection $connection)
     {
         $this->conn = $connection;
+    }
+
+    public function setRestartAfter($value)
+    {
+        $this->restartAfter = $value;
+    }
+
+    public function setSleepTimes($afterRequest, $afterEmpty)
+    {
+        $this->usleepAfterRequest = $afterRequest;
+        $this->usleepAfterEmpty = $afterEmpty;
     }
 
     public function setDebug($debug)
@@ -72,7 +84,7 @@ class RunnerService
         }
 
         $this->logger->info('Worker started: #' . $this->cWorker);
-        while ($running && $this->counter <= self::RESTART_AFTER_JOBS) {
+        while ($running && $this->counter <= $this->restartAfter) {
             if ($requestsData = $this->getNextRequest()) {
                 $ok = true;
                 foreach ($requestsData as $requestData) {
@@ -82,10 +94,10 @@ class RunnerService
                         $this->unlockRequest($requestData);
                     }
                 }
-                usleep(self::$defaultPause);
+                usleep($this->usleepAfterRequest);
             } else {
                 $this->logger->debug("Nothing found, sleeping...");
-                usleep(self::$waitingPause);
+                usleep($this->usleepAfterEmpty);
             }
             if ($this->getDebug()) {
                 $memoryUsage      = memory_get_usage();

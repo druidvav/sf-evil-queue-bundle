@@ -25,11 +25,11 @@ CREATE TABLE xmlrpc_queue
   comment TEXT,
   protocol TEXT DEFAULT 'xmlrpc'::text NOT NULL
 );
-CREATE INDEX name_idx ON xmlrpc_queue (name);
-CREATE INDEX method_idx ON xmlrpc_queue (method);
-CREATE INDEX tries_idx ON xmlrpc_queue (tries);
-CREATE INDEX create_date_idx ON xmlrpc_queue (create_date);
-CREATE INDEX last_request_date_idx ON xmlrpc_queue (last_request_date);
+CREATE INDEX xmlrpc_queue_name_idx ON xmlrpc_queue (name);
+CREATE INDEX xmlrpc_queue_method_idx ON xmlrpc_queue (method);
+CREATE INDEX xmlrpc_queue_tries_idx ON xmlrpc_queue (tries);
+CREATE INDEX xmlrpc_queue_create_date_idx ON xmlrpc_queue (create_date);
+CREATE INDEX xmlrpc_queue_last_request_date_idx ON xmlrpc_queue (last_request_date);
 
 CREATE TABLE xmlrpc_queue_complete
 (
@@ -50,8 +50,8 @@ CREATE TABLE xmlrpc_queue_complete
   protocol TEXT DEFAULT 'xmlrpc'::text NOT NULL,
   worker_code TEXT
 );
-CREATE INDEX name_idx ON xmlrpc_queue_complete (name);
-CREATE INDEX method_idx ON xmlrpc_queue_complete (method);
-CREATE INDEX tries_idx ON xmlrpc_queue_complete (tries);
-CREATE INDEX create_date_idx ON xmlrpc_queue_complete (create_date);
-CREATE INDEX last_request_date_idx ON xmlrpc_queue_complete (last_request_date);
+CREATE INDEX xmlrpc_queue_complete_name_idx ON xmlrpc_queue_complete (name);
+CREATE INDEX xmlrpc_queue_complete_method_idx ON xmlrpc_queue_complete (method);
+CREATE INDEX xmlrpc_queue_complete_tries_idx ON xmlrpc_queue_complete (tries);
+CREATE INDEX xmlrpc_queue_complete_create_date_idx ON xmlrpc_queue_complete (create_date);
+CREATE INDEX xmlrpc_queue_complete_last_request_date_idx ON xmlrpc_queue_complete (last_request_date);

@@ -23,6 +23,8 @@ class DvEvilQueueConfiguration implements ConfigurationInterface
                 scalarNode("workers")->defaultValue(1)->end()->
                 scalarNode("priority_workers")->defaultValue(1)->end()->
                 scalarNode("debug")->defaultFalse()->end()->
+                scalarNode("usleep_after_request")->defaultValue(50000)->end()->
+                scalarNode("usleep_after_empty")->defaultValue(2000000)->end()->
             end()
         ;
 

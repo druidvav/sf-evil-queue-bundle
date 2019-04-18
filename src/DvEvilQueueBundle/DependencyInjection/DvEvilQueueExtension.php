@@ -27,14 +27,12 @@ class DvEvilQueueExtension extends Extension
      * Loads the configuration in, with any defaults
      *
      * @param array $configs
-     * @param \Symfony\Component\DependencyInjection\ContainerBuilder $container
+     * @param ContainerBuilder $container
      * @throws \Exception
      */
     protected function loadConfiguration(array $configs, ContainerBuilder $container)
     {
         $config = $this->processConfiguration(new DvEvilQueueConfiguration(), $configs);
-        $container->setParameter('evil_queue.workers', $config['workers']);
-        $container->setParameter('evil_queue.priority_workers', $config['priority_workers']);
 
         $connectionRef = new Reference(str_replace('@', '', $config['connection']));
         $loggerRef = new Reference(str_replace('@', '', $config['logger']));
@@ -53,15 +51,20 @@ class DvEvilQueueExtension extends Extension
         $optionDef->setPublic(true);
         $container->setDefinition('evil', $optionDef);
 
+        $container->setAlias('evil_logger', str_replace('@', '', $config['logger']));
+
         $optionDef = new Definition(QueueCommand::class);
-        $optionDef->addMethodCall('setContainer', [ new Reference('service_container') ]);
+        $optionDef->addMethodCall('setEvil', [ new Reference('evil') ]);
+        $optionDef->addMethodCall('setLogger', [ new Reference('evil_logger') ]);
+        $optionDef->addMethodCall('setKernel', [ new Reference('kernel') ]);
+        $optionDef->addMethodCall('setConfig', [ $config['workers'], $config['priority_workers'] ]);
         $optionDef->setPublic(true);
         $container->setDefinition('evil.command.queue', $optionDef);
+
         $optionDef = new Definition(QueueRunnerCommand::class);
-        $optionDef->addMethodCall('setContainer', [ new Reference('service_container') ]);
+        $optionDef->addMethodCall('setRunner', [ new Reference('evil_queue') ]);
         $optionDef->setPublic(true);
         $container->setDefinition('evil.command.queue_runner', $optionDef);
 
-        $container->setAlias('evil_logger', str_replace('@', '', $config['logger']));
     }
 }

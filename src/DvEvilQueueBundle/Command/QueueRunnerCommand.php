@@ -1,13 +1,22 @@
 <?php
 namespace DvEvilQueueBundle\Command;
 
-use Druidvav\EssentialsBundle\Command;
+use DvEvilQueueBundle\Service\RunnerService;
+use Symfony\Component\Console\Command\Command;
 use Symfony\Component\Console\Input\InputInterface;
 use Symfony\Component\Console\Input\InputOption;
 use Symfony\Component\Console\Output\OutputInterface;
 
 class QueueRunnerCommand extends Command
 {
+    /** @var RunnerService */
+    protected $runner;
+
+    public function setRunner(RunnerService $runner)
+    {
+        $this->runner = $runner;
+    }
+
     /**
      * {@inheritdoc}
      */
@@ -26,8 +35,7 @@ class QueueRunnerCommand extends Command
     {
         $cWorker = $input->getArgument('worker');
         $isPriority = $input->getOption('priority') === true;
-        $evilQueue = $this->getContainer()->get('evil_queue');
-        $evilQueue->setWorker($cWorker, $isPriority);
-        $evilQueue->run();
+        $this->runner->setWorker($cWorker, $isPriority);
+        $this->runner->run();
     }
 }

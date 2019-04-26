@@ -44,7 +44,7 @@ class EvilService
             'protocol' => $request->getProtocol(),
             'url' => $request->getUrl(),
             'method' => $request->getMethod(),
-            'request_param' => $request->isJsonRpc() ? json_encode($request->getRequestParam()) : serialize($request->getRequestParam()),
+            'request_param' => $request->isJsonRpc() ? json_encode($request->getRequestParam(), JSON_UNESCAPED_UNICODE) : serialize($request->getRequestParam()),
             'create_date' => date('Y-m-d H:i:s'),
             'request_timeout' => $request->getRequestTimeout(),
         ]);

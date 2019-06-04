@@ -13,6 +13,12 @@ use Zend\XmlRpc\Client\Exception\FaultException;
 
 class ApiClient
 {
+    /**
+     * @param Request $request
+     * @return Response
+     * @throws ApiClientException
+     * @throws ApiServiceException
+     */
     public function call(Request $request): Response
     {
         try {

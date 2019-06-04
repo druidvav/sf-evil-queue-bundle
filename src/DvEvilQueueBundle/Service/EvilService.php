@@ -2,6 +2,8 @@
 namespace DvEvilQueueBundle\Service;
 
 use Doctrine\DBAL\Connection;
+use DvEvilQueueBundle\Exception\ApiClientException;
+use DvEvilQueueBundle\Exception\ApiServiceException;
 use DvEvilQueueBundle\Service\Caller\Request;
 use DvEvilQueueBundle\Service\Caller\Response;
 use Exception;
@@ -15,6 +17,12 @@ class EvilService
         $this->conn = $connection;
     }
 
+    /**
+     * @param Request $request
+     * @return Response
+     * @throws ApiClientException
+     * @throws ApiServiceException
+     */
     public function execute(Request $request): Response
     {
         $client = new ApiClient();

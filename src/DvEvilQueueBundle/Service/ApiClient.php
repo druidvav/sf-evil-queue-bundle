@@ -2,7 +2,9 @@
 namespace DvEvilQueueBundle\Service;
 
 use DvEvilQueueBundle\Exception\ApiClientException;
+use DvEvilQueueBundle\Exception\ApiServiceException;
 use DvEvilQueueBundle\Service\Caller\Request;
+use DvEvilQueueBundle\Service\Caller\Response;
 use Zend\Http\Client\Exception\RuntimeException;
 use Zend\Http\Request as HttpRequest;
 use Zend\XmlRpc\Client as XmlRpcClient;
@@ -11,7 +13,7 @@ use Zend\XmlRpc\Client\Exception\FaultException;
 
 class ApiClient
 {
-    public function call(Request $request)
+    public function call(Request $request): Response
     {
         try {
             if ($request->isHttp()) {
@@ -28,20 +30,20 @@ class ApiClient
         }
     }
 
-    protected function callXmlRpc(Request $request)
+    protected function callXmlRpc(Request $request): Response
     {
         $client = new XmlRpcClient($request->getUrl());
         $client->setSkipSystemLookup();
         $client->getHttpClient()->setOptions([ 'timeout' => $request->getRequestTimeout() ]);
         $response = $client->call($request->getMethod(), $request->getRequestParam());
-        return [
-            'status' => is_array($response) && array_key_exists('status', $response) ? $response['status'] : 'error',
-            'last_output' => $client->getLastResponse() ? $client->getLastResponse()->getReturnValue() : '',
-            'response' => $response
-        ];
+        return new Response(
+            is_array($response) && array_key_exists('status', $response) ? $response['status'] : 'error',
+            $client->getLastResponse() ? $client->getLastResponse()->getReturnValue() : '',
+            $response
+        );
     }
 
-    protected function callHttp(Request $request)
+    protected function callHttp(Request $request): Response
     {
         $client = new HttpClient($request->getUrl(), [ 'timeout' => $request->getRequestTimeout() ]);
 
@@ -62,17 +64,13 @@ class ApiClient
         }
         $response = $client->send();
 
-        return [
-            'status' => $response->getStatusCode() == 200 ? 'ok' : 'error',
-            'last_output' => $response->getBody() ? $response->getBody() : '',
-            'response' => [
-                'status' => $response->getStatusCode(),
-                'message' => $response->getReasonPhrase(),
-            ]
-        ];
+        return new Response($response->getStatusCode() == 200 ? 'ok' : 'error', [
+            'status' => $response->getStatusCode(),
+            'message' => $response->getReasonPhrase(),
+        ], $response->getBody() ?: '');
     }
 
-    protected function callJsonRpc(Request $request)
+    protected function callJsonRpc(Request $request): Response
     {
         $client = new HttpClient($request->getUrl(), [ 'timeout' => $request->getRequestTimeout() ]);
         $client->setMethod(HttpRequest::METHOD_POST);
@@ -98,21 +96,18 @@ class ApiClient
 
         $decodedResponse = @json_decode($response->getBody(), true);
         if (!is_array($decodedResponse)) {
-            return [
-                'status' => 'error',
-                'message' => 'Invalid response. The HTTP body should be a valid JSON.',
-                'last_output' => $response->getBody() ? $response->getBody() : '',
-            ];
+            throw (new ApiServiceException('Invalid response. The HTTP body should be a valid JSON.'))->setOutput($response->getBody() ?: '');
         }
-
-        $hasStatus = array_key_exists('result', $decodedResponse)
-            && is_array($decodedResponse['result'])
-            && array_key_exists('status', $decodedResponse['result']);
-
-        return [
-            'status' => $hasStatus ? $decodedResponse['result']['status'] : 'error',
-            'response' => $decodedResponse,
-            'last_output' => $response->getBody() ? $response->getBody() : '',
-        ];
+        if (!empty($decodedResponse['error'])) {
+            throw (new ApiServiceException($decodedResponse['error']['message']))->setOutput($response->getBody() ?: '');
+        }
+        $decodedResponse = $decodedResponse['result'];
+        if (!empty($decodedResponse['status']) && $decodedResponse['status'] == 'error') {
+            throw (new ApiServiceException('Legacy error message, this situations should be avoided at any cost!'))->setOutput($response->getBody() ?: '');
+        }
+        if (!empty($decodedResponse['status']) && array_key_exists('data', $decodedResponse)) {
+            $decodedResponse = $decodedResponse['data'];
+        }
+        return new Response('ok', $decodedResponse, $response->getBody() ?: '');
     }
 }

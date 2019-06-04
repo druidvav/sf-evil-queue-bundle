@@ -3,6 +3,8 @@ namespace DvEvilQueueBundle\Service;
 
 use Doctrine\DBAL\Connection;
 use DvEvilQueueBundle\Service\Caller\Request;
+use DvEvilQueueBundle\Service\Caller\Response;
+use Exception;
 
 class EvilService
 {
@@ -13,7 +15,7 @@ class EvilService
         $this->conn = $connection;
     }
 
-    public function execute(Request $request)
+    public function execute(Request $request): Response
     {
         $client = new ApiClient();
         return $client->call($request);
@@ -77,7 +79,7 @@ class EvilService
         } elseif ($driver == 'pdo_pgsql') {
             return true;
         } else {
-            throw new \Exception('Unknown database driver: ' . $driver);
+            throw new Exception('Unknown database driver: ' . $driver);
         }
     }
 }

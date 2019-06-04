@@ -1,7 +1,10 @@
 <?php
+/** @noinspection SqlRedundantOrderingDirection */
+
 namespace DvEvilQueueBundle\Service;
 
 use Doctrine\DBAL\Exception\UniqueConstraintViolationException;
+use DvEvilQueueBundle\Exception\ApiServiceException;
 use DvEvilQueueBundle\Service\Caller\Request;
 use Exception;
 use Doctrine\DBAL\Connection;
@@ -80,7 +83,7 @@ class RunnerService
 
         $tmpDir = sys_get_temp_dir();
         if ($this->getDebug() && !is_writable($tmpDir)) {
-            throw new \Exception('Temporary directory is not writable');
+            throw new Exception('Temporary directory is not writable');
         }
 
         $this->logger->info('Worker started: #' . $this->cWorker);
@@ -166,7 +169,7 @@ class RunnerService
                 return true;
             }
         } else {
-            throw new \Exception('Unknown database driver: ' . $driver);
+            throw new Exception('Unknown database driver: ' . $driver);
         }
     }
 
@@ -180,7 +183,7 @@ class RunnerService
             $this->conn->commit();
             return true;
         } else {
-            throw new \Exception('Unknown database driver: ' . $driver);
+            throw new Exception('Unknown database driver: ' . $driver);
         }
     }
 
@@ -217,19 +220,21 @@ class RunnerService
 
         try {
             $response = $client->call(Request::fromArray($request));
-            $status = $response['status'];
-            $lastOutput = $response['last_output'];
-            unset($response['last_output']);
+            $status = $response->getStatus();
 
             $runtime = round((microtime(true) - $start) * 1000);
-            if (in_array($status, [ 'ok', 'warning' ])) {
-                $this->handleSuccess($request, $response, $runtime);
+            if ($response->isOk()) {
+                $this->handleSuccess($request, $response->getResponseForTable(), $runtime);
                 $return = true;
             } else {
-                $this->handleError($request, $response, $lastOutput);
+                $this->handleError($request, $response->getResponseForTable(), $response->getOutput());
                 $return = false;
             }
             $this->resetFailCounter($request);
+        } catch (ApiServiceException $e) {
+            $status = 'error';
+            $this->handleError($request, $e->getResponseForTable(), $e->getOutput());
+            $return = false;
         } catch (Exception $e) {
             $status = 'exception';
             $this->handleError($request, [ 'status' => 'error', 'type' => 'request error', 'message' => $e->getMessage() ]);

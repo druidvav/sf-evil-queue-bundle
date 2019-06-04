@@ -36,11 +36,23 @@ class ApiClient
         $client->setSkipSystemLookup();
         $client->getHttpClient()->setOptions([ 'timeout' => $request->getRequestTimeout() ]);
         $response = $client->call($request->getMethod(), $request->getRequestParam());
-        return new Response(
-            is_array($response) && array_key_exists('status', $response) ? $response['status'] : 'error',
-            $client->getLastResponse() ? $client->getLastResponse()->getReturnValue() : '',
-            $response
-        );
+
+        if (empty($response['status'])) {
+            throw (new ApiServiceException('Unknown status'))->setOutput($response->getBody() ?: '');
+        } elseif ($response['status'] == 'error' || !empty($response['error_message_pretty']) || !empty($response['error_message'])) {
+            if (!empty($response['error_message_pretty'])) {
+                throw (new ApiServiceException($response['error_message_pretty']))->setOutput($response->getBody() ?: '');
+            } elseif (!empty($response['error_message'])) {
+                throw (new ApiServiceException($response['error_message']))->setOutput($response->getBody() ?: '');
+            } else {
+                throw (new ApiServiceException('Unknown error'))->setOutput($response->getBody() ?: '');
+            }
+        } elseif (!empty($response['warning_message_pretty'])) {
+            $response = $response['warning_message_pretty'];
+        } elseif (!empty($response['status']) && array_key_exists('data', $response)) {
+            $response = $response['data'];
+        }
+        return new Response($response['status'], $response, $client->getLastResponse() ? $client->getLastResponse()->getReturnValue() : '');
     }
 
     protected function callHttp(Request $request): Response

@@ -7,7 +7,7 @@ class Response
     protected $output;
     protected $response;
 
-    public function __construct($status, $output, $response)
+    public function __construct($status, $response, $output)
     {
         $this->status = $status;
         $this->output = $output;

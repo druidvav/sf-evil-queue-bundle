@@ -42,23 +42,23 @@ class ApiClient
         $client->setSkipSystemLookup();
         $client->getHttpClient()->setOptions([ 'timeout' => $request->getRequestTimeout() ]);
         $response = $client->call($request->getMethod(), $request->getRequestParam());
-
+        $output = $client->getLastResponse() ? $client->getLastResponse()->getReturnValue() : '';
         if (empty($response['status'])) {
-            throw (new ApiServiceException('Unknown status'))->setOutput($response->getBody() ?: '');
+            throw (new ApiServiceException('Unknown status'))->setOutput($output);
         } elseif ($response['status'] == 'error' || !empty($response['error_message_pretty']) || !empty($response['error_message'])) {
             if (!empty($response['error_message_pretty'])) {
-                throw (new ApiServiceException($response['error_message_pretty']))->setOutput($response->getBody() ?: '');
+                throw (new ApiServiceException($response['error_message_pretty']))->setOutput($output);
             } elseif (!empty($response['error_message'])) {
-                throw (new ApiServiceException($response['error_message']))->setOutput($response->getBody() ?: '');
+                throw (new ApiServiceException($response['error_message']))->setOutput($output);
             } else {
-                throw (new ApiServiceException('Unknown error'))->setOutput($response->getBody() ?: '');
+                throw (new ApiServiceException('Unknown error'))->setOutput($output);
             }
         } elseif (!empty($response['warning_message_pretty'])) {
             $response = $response['warning_message_pretty'];
         } elseif (!empty($response['status']) && array_key_exists('data', $response)) {
             $response = $response['data'];
         }
-        return new Response('ok', $response, $client->getLastResponse() ? $client->getLastResponse()->getReturnValue() : '');
+        return new Response('ok', $response, $output);
     }
 
     protected function callHttp(Request $request): Response

@@ -58,7 +58,7 @@ class ApiClient
         } elseif (!empty($response['status']) && array_key_exists('data', $response)) {
             $response = $response['data'];
         }
-        return new Response($response['status'], $response, $client->getLastResponse() ? $client->getLastResponse()->getReturnValue() : '');
+        return new Response('ok', $response, $client->getLastResponse() ? $client->getLastResponse()->getReturnValue() : '');
     }
 
     protected function callHttp(Request $request): Response

@@ -36,9 +36,20 @@ class Response
 
     public function getResponseForTable()
     {
-        return [
-            'status' => $this->status,
-            'response' => $this->response,
-        ];
+        if ($this->isOk()) {
+            if (array_key_exists('status', $this->response)) {
+                return $this->response;
+            } else {
+                return [
+                    'status' => $this->status,
+                    'response' => $this->response,
+                ];
+            }
+        } else {
+            return [
+                'status' => $this->status,
+                'response' => $this->response,
+            ];
+        }
     }
 }

@@ -58,7 +58,7 @@ class ApiClient
         } elseif (!empty($response['status']) && array_key_exists('data', $response)) {
             $response = $response['data'];
         }
-        return new Response('ok', $response, $output);
+        return new Response($response, $output);
     }
 
     protected function callHttp(Request $request): Response
@@ -81,11 +81,10 @@ class ApiClient
             $client->setRawBody($params['body']);
         }
         $response = $client->send();
-
-        return new Response($response->getStatusCode() == 200 ? 'ok' : 'error', [
-            'status' => $response->getStatusCode(),
-            'message' => $response->getReasonPhrase(),
-        ], $response->getBody() ?: '');
+        if ($response->getStatusCode() != 200) {
+            throw (new ApiServiceException('HTTP error: ' . $response->getStatusCode() . ' ' . $response->getReasonPhrase()))->setOutput($response->getBody() ?: '');
+        }
+        return new Response([ ], $response->getBody() ?: '');
     }
 
     protected function callJsonRpc(Request $request): Response
@@ -126,6 +125,6 @@ class ApiClient
         if (!empty($decodedResponse['status']) && array_key_exists('data', $decodedResponse)) {
             $decodedResponse = $decodedResponse['data'];
         }
-        return new Response('ok', $decodedResponse, $response->getBody() ?: '');
+        return new Response($decodedResponse, $response->getBody() ?: '');
     }
 }

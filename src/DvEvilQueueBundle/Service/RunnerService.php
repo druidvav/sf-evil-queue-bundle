@@ -216,21 +216,14 @@ class RunnerService
     protected function executeRequest($request)
     {
         $start = microtime(true);
-        $client = new ApiClient();
-
         try {
+            $client = new ApiClient();
             $response = $client->call(Request::fromArray($request));
-            $status = $response->getStatus();
-
             $runtime = round((microtime(true) - $start) * 1000);
-            if ($response->isOk()) {
-                $this->handleSuccess($request, $response->getResponseForTable(), $runtime);
-                $return = true;
-            } else {
-                $this->handleError($request, $response->getResponseForTable(), $response->getOutput());
-                $return = false;
-            }
+            $this->handleSuccess($request, $response->getResponseForTable(), $runtime);
             $this->resetFailCounter($request);
+            $status = 'ok';
+            $return = true;
         } catch (ApiServiceException $e) {
             $status = 'error';
             $this->handleError($request, $e->getResponseForTable(), $e->getOutput());

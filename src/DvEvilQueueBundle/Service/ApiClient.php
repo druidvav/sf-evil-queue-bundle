@@ -5,11 +5,11 @@ use DvEvilQueueBundle\Exception\ApiClientException;
 use DvEvilQueueBundle\Exception\ApiServiceException;
 use DvEvilQueueBundle\Service\Caller\Request;
 use DvEvilQueueBundle\Service\Caller\Response;
-use Zend\Http\Client\Exception\RuntimeException;
-use Zend\Http\Request as HttpRequest;
-use Zend\XmlRpc\Client as XmlRpcClient;
-use Zend\Http\Client as HttpClient;
-use Zend\XmlRpc\Client\Exception\FaultException;
+use Laminas\Http\Client\Exception\RuntimeException;
+use Laminas\Http\Request as HttpRequest;
+use Laminas\XmlRpc\Client as XmlRpcClient;
+use Laminas\Http\Client as HttpClient;
+use Laminas\XmlRpc\Client\Exception\FaultException;
 
 class ApiClient
 {

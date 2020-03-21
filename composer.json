@@ -7,7 +7,7 @@
     "psr-4": { "": "src/" }
   },
   "require": {
-    "php": ">=7.1.0",
+    "php": ">=7.2.0",
     "ext-pcntl": "*",
     "ext-json": "*",
     "symfony/framework-bundle": "^3.4",
@@ -15,7 +15,7 @@
     "symfony/console": "^3.4",
     "doctrine/dbal": "^2.5",
     "druidvav/essentials-bundle": "^2.0",
-    "zendframework/zend-xmlrpc": "^2.7"
+    "laminas/laminas-xmlrpc": "^2.7"
   },
   "require-dev": {
 

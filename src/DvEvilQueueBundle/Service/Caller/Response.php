@@ -24,7 +24,7 @@ class Response
 
     public function getResponseForTable()
     {
-        if (array_key_exists('status', $this->response) && $this->response['status'] == 'ok') {
+        if (is_array($this->response) && array_key_exists('status', $this->response) && $this->response['status'] == 'ok') {
             return $this->response;
         } else {
             return [

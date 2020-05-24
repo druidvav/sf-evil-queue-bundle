@@ -193,10 +193,9 @@ class RunnerService
         return $this->conn->fetchColumn("
             select q.name
             from xmlrpc_queue q
-            left join xmlrpc_queue qprev on qprev.name = q.name and qprev.id < q.id
             left join xmlrpc_host_down h on h.host = " . str_replace(':url', 'q.url', self::HOST_EXPR) . "
             where
-              qprev.id is null
+              q.id in (select min(id) as id from xmlrpc_queue group by name)
               and (q.last_request_start is null or q.last_request_start <= q.last_request_date)
               and (q.next_request_date is null or q.next_request_date <= now())
               and (h.down_untill is null or h.down_untill < NOW())

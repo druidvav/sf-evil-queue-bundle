@@ -26,7 +26,7 @@ class RunnerService
 
     protected static $triesTillBan = 29;
     protected static $banPeriod = '+10 minutes';
-    protected static $maxRequestsByQueueName = 15;
+    public static $maxRequestsByQueueName = 15;
 
     const LOCK_ID = 'evil';
     const LOCK_ID_INT = 57399031;

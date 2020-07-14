@@ -118,6 +118,9 @@ class ApiClient
         if (!empty($decodedResponse['error'])) {
             throw (new ApiServiceException($decodedResponse['error']['message']))->setOutput($response->getBody() ?: '');
         }
+        if (!array_key_exists('result', $decodedResponse)) {
+            throw (new ApiServiceException('Invalid JSON-RPC response: No "result" key.'))->setOutput($response->getBody() ?: '');
+        }
         $decodedResponse = $decodedResponse['result'];
         if (!empty($decodedResponse['status']) && $decodedResponse['status'] == 'error') {
             throw (new ApiServiceException('Legacy error message, this situations should be avoided at any cost!'))->setOutput($response->getBody() ?: '');

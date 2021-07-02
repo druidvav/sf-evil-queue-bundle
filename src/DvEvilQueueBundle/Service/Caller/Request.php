@@ -13,7 +13,7 @@ class Request
     protected $requestParam;
     protected $requestTimeout = 30;
 
-    public static function fromArray(array $request)
+    public static function fromArray(array $request): Request
     {
         if ($request['protocol'] == self::PROTOCOL_HTTP) {
             $protocol = self::PROTOCOL_HTTP;
@@ -46,17 +46,17 @@ class Request
         $this->requestTimeout = $timeout;
     }
 
-    public function isXmlRpc()
+    public function isXmlRpc(): bool
     {
         return $this->protocol == self::PROTOCOL_XML_RPC;
     }
 
-    public function isHttp()
+    public function isHttp(): bool
     {
         return $this->protocol == self::PROTOCOL_HTTP;
     }
 
-    public function isJsonRpc()
+    public function isJsonRpc(): bool
     {
         return $this->protocol == self::PROTOCOL_JSON_RPC;
     }
@@ -76,12 +76,12 @@ class Request
         return $this->method;
     }
 
-    public function getRequestParam()
+    public function getRequestParam(): array
     {
         return $this->isHttp() ? $this->requestParam : array_values($this->requestParam);
     }
 
-    public function getRequestTimeout()
+    public function getRequestTimeout(): int
     {
         return $this->requestTimeout;
     }

@@ -46,7 +46,7 @@ class EvilService
         }
     }
 
-    public function enqueue(Request $request, $queueName = 'general', $priority = 0)
+    public function enqueue(Request $request, $queueName = 'general', $priority = 0): string
     {
         $this->conn->insert('xmlrpc_queue', [
             'name' => $queueName,
@@ -66,7 +66,7 @@ class EvilService
         $this->conn->delete('xmlrpc_queue', [ 'id' => $requestId ]);
     }
 
-    public function existsQueue($queueName)
+    public function existsQueue($queueName): bool
     {
         return $this->conn->fetchColumn('select id from xmlrpc_queue where name = :name limit 1', [ 'name' => $queueName ]) > 0;
     }
@@ -76,7 +76,7 @@ class EvilService
         $this->conn->delete('xmlrpc_queue', [ 'name' => $queueName ]);
     }
 
-    public function fixAutoIncrement()
+    public function fixAutoIncrement(): bool
     {
         $driver = $this->conn->getDriver()->getName();
         if ($driver == 'pdo_mysql') {

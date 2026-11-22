@@ -48,7 +48,7 @@ class EvilService
 
     public function enqueue(Request $request, $queueName = 'general', $priority = 0): string
     {
-        $this->conn->insert('xmlrpc_queue', [
+        $data = [
             'name' => $queueName,
             'priority' => $priority,
             'protocol' => $request->getProtocol(),
@@ -57,7 +57,11 @@ class EvilService
             'request_param' => $request->isJsonRpc() ? json_encode($request->getRequestParam(), JSON_UNESCAPED_UNICODE) : serialize($request->getRequestParam()),
             'create_date' => date('Y-m-d H:i:s'),
             'request_timeout' => $request->getRequestTimeout(),
-        ]);
+        ];
+        if ($request->isJsonRpc() && $request->getIdSuffix() !== null && $request->getIdSuffix() !== '') {
+            $data['comment'] = 'jsonrpc_id_suffix=' . $request->getIdSuffix();
+        }
+        $this->conn->insert('xmlrpc_queue', $data);
         return $this->conn->lastInsertId();
     }
 

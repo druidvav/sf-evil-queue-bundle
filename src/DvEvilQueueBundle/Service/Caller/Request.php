@@ -12,6 +12,7 @@ class Request
     protected $method;
     protected $requestParam;
     protected $requestTimeout = 30;
+    protected $idSuffix;
 
     public static function fromArray(array $request): Request
     {
@@ -30,6 +31,10 @@ class Request
         }
         $object = new self($protocol, $request['url'], $request['method'], (array) $requestParam);
         if (!empty($request['request_timeout'])) $object->setTimeout($request['request_timeout']);
+        if ($object->isJsonRpc() && isset($request['comment'])
+            && preg_match('/\Ajsonrpc_id_suffix=(.+)\z/s', $request['comment'], $matches)) {
+            $object->setIdSuffix($matches[1]);
+        }
         return $object;
     }
 
@@ -44,6 +49,16 @@ class Request
     public function setTimeout($timeout)
     {
         $this->requestTimeout = $timeout;
+    }
+
+    public function setIdSuffix(?string $suffix): void
+    {
+        $this->idSuffix = $suffix;
+    }
+
+    public function getIdSuffix(): ?string
+    {
+        return $this->idSuffix;
     }
 
     public function isXmlRpc(): bool

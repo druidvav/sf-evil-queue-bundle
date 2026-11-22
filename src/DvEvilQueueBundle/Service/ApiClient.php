@@ -102,6 +102,9 @@ class ApiClient
         }
 
         $id = uniqid(null, true);
+        if ($request->getIdSuffix() !== null && $request->getIdSuffix() !== '') {
+            $id .= '@' . $request->getIdSuffix();
+        }
         $client->setRawBody(json_encode([
             "jsonrpc" => "2.0",
             "id" => $id,
